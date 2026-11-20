@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e1116">
+<link rel="icon" href="data:,">
+<title>RODADA NA TELA!</title>
+<style>
+  :root { --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8ecf2; --dim:#8b95a5;
+          --win:#3ecf8e; --loss:#f0616d; --tie:#e9b44c; --live:#5aa9ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 1.6rem; margin: 0 0 2px; letter-spacing: .02em; font-weight: 800; }
+  .sub { color: var(--dim); margin: 0 0 14px; font-size: .88rem; }
+  .status { display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 6px; }
+  .pill { border:1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size:.8rem; color:var(--dim); }
+  .pill b { color: var(--ink); font-weight: 600; }
+  .pill.warn { border-color: var(--tie); color: var(--tie); }
+  h2 { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); margin: 22px 0 8px; font-weight:600; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius: 12px; padding: 13px 14px; margin-bottom: 10px; }
+  .card.playing { border-color: var(--live); }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .name { font-weight: 650; font-size: 1.02rem; margin:0; overflow-wrap:anywhere; }
+  .meta { color:var(--dim); font-size:.82rem; margin: 1px 0 0; }
+  .rec { font: 700 1.55rem/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space:nowrap; font-variant-numeric: tabular-nums; }
+  .rec i { font-style:normal; color:var(--dim); font-weight:400; padding:0 1px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; list-style:none; padding:0; margin: 10px 0 0; }
+  .chips li { font-size:.72rem; font-weight:700; border-radius:6px; padding: 3px 7px; background:#222833; color:var(--dim); }
+  .chips .W { background: rgba(62,207,142,.16); color: var(--win); }
+  .chips .L { background: rgba(240,97,109,.16); color: var(--loss); }
+  .chips .T { background: rgba(233,180,76,.16); color: var(--tie); }
+  .chips .LIVE { background: rgba(90,169,255,.16); color: var(--live); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity:.55; } }
+  @media (prefers-reduced-motion: reduce) { .chips .LIVE { animation:none; } }
+  .nowline { margin: 9px 0 0; font-size:.88rem; overflow-wrap:anywhere; }
+  .nowline .dot { color: var(--live); }
+  .note { margin: 8px 0 0; font-size:.78rem; color: var(--tie); }
+  details { margin-top: 9px; border-top:1px solid var(--line); padding-top: 8px; }
+  summary { cursor:pointer; color:var(--dim); font-size:.8rem; }
+  table { width:100%; border-collapse:collapse; margin-top:6px; font-size:.84rem; }
+  td { padding: 4px 6px 4px 0; vertical-align:top; overflow-wrap:anywhere; }
+  td.r { color:var(--dim); width:2.4em; } td.res { width:1.6em; font-weight:700; } td.tb { color:var(--dim); text-align:right; white-space:nowrap; }
+  .W { color: var(--win); } .L { color: var(--loss); } .T { color: var(--tie); } .LIVE { color: var(--live); }
+  .dim { color: var(--dim); }
+  footer { color:var(--dim); font-size:.76rem; margin-top: 26px; }
+  a { color: inherit; }
+  .empty { color: var(--dim); padding: 30px 0; text-align:center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RODADA NA TELA!</h1>
+  <p class="sub" id="sub">Carregando…</p>
+  <div class="status" id="status"></div>
+  <div id="list"><p class="empty">Carregando…</p></div>
+  <footer>
+    Dados: <a id="src" href="https://www.pokedata.ovh/standings2/" rel="noopener">pokedata.ovh</a>, calculados a partir dos pareamentos do RK9. Não oficial.
+    <span id="age"></span>
+  </footer>
+</main>
+<script>
+(function () {
+  var LABEL = { W: 'V', L: 'D', T: 'E', LIVE: '●', '?': '?' };
+  var WORD = { W: 'Vitória', L: 'Derrota', T: 'Empate', LIVE: 'Jogando', '?': 'Sem resultado' };
+  var DIV = { Masters: 'Masters', Senior: 'Seniors', Junior: 'Juniors' };
+  var STALE_MS = 30 * 60 * 1000;
+  var last = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function num(n) { return Number(n).toLocaleString('pt-BR'); }
+  function clock(t) { return new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+  function ago(ms) {
+    var m = Math.max(0, Math.round(ms / 60000));
+    if (m < 1) return 'agora';
+    if (m < 90) return 'há ' + m + ' min';
+    return 'há ' + Math.round(m / 60) + ' h';
+  }
+  function versus(r) {
+    if (r.bye) return 'bye';
+    if (!r.opponent) return 'sem oponente';
+    return esc(r.opponent.name) + ' <span class="dim">(' + esc(r.opponent.record) + ')</span>';
+  }
+
+  function card(p, d) {
+    if (p.missing) {
+      return '<article class="card"><p class="name">' + esc(p.name) + '</p><p class="meta">Não encontrado nos standings de ' + esc(DIV[d.division] || d.division) + '.</p></article>';
+    }
+    var rounds = p.rounds || [];
+    var cur = rounds.length ? rounds[rounds.length - 1] : null;
+    var playing = !!cur && cur.result === 'LIVE';
+    var h = '<article class="card' + (playing ? ' playing' : '') + '" data-k="' + esc(d.division + '#' + p.id) + '">';
+    h += '<div class="top"><div><p class="name">' + esc(p.name) + '</p>';
+    h += '<p class="meta">#' + num(p.rank) + ' de ' + num(d.total) + ' · ' + p.points + ' pts</p></div>';
+    h += '<div class="rec" aria-label="Vitórias, derrotas, empates">' + p.record[0] + '<i>-</i>' + p.record[1] + '<i>-</i>' + p.record[2] + '</div></div>';
+    if (rounds.length) {
+      h += '<ol class="chips">';
+      rounds.forEach(function (r) { h += '<li class="' + esc(r.result) + '" title="' + esc(WORD[r.result] || '') + '">R' + r.n + ' ' + (LABEL[r.result] || '?') + '</li>'; });
+      h += '</ol>';
+    }
+    if (playing) {
+      h += '<p class="nowline"><span class="dot">●</span> Jogando a R' + cur.n + (cur.table ? ' · mesa ' + cur.table : '') + ' · vs ' + versus(cur) + '</p>';
+    }
+    if (p.droppedAfter != null) h += '<p class="note">Drop após a rodada ' + p.droppedAfter + '.</p>';
+    else if (d.round && rounds.length < d.round) {
+      if (d.day1 && d.round > d.day1 && rounds.length <= d.day1) h += '<p class="note">Não está no dia 2.</p>';
+      else h += '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>';
+    }
+    if (p.homonyms > 1) h += '<p class="note">' + p.homonyms + ' jogadores com este nome no torneio (id ' + p.id + ').</p>';
+    if (rounds.length) {
+      h += '<details><summary>Rodadas</summary><table>';
+      rounds.forEach(function (r) {
+        h += '<tr><td class="r">R' + r.n + '</td><td class="res ' + esc(r.result) + '">' + (LABEL[r.result] || '?') + '</td><td>' + versus(r) + '</td>';
+        h += '<td class="tb">' + (r.table ? 'mesa ' + r.table : '') + '</td></tr>';
+      });
+      h += '</table></details>';
+    }
+    return h + '</article>';
+  }
+
+  function render(s) {
+    last = s;
+    var divs = s.divisions || [];
+    var t = divs.filter(function (d) { return d.title; })[0];
+    document.getElementById('sub').textContent = t ? t.title + (t.date ? ' · ' + t.date : '') : 'Acompanhando a liga';
+    if (s.sourcePage) document.getElementById('src').href = s.sourcePage;
+
+    var open = {};
+    Array.prototype.forEach.call(document.querySelectorAll('article[data-k]'), function (el) {
+      var det = el.querySelector('details');
+      if (det && det.open) open[el.getAttribute('data-k')] = 1;
+    });
+
+    var st = '';
+    var html = '';
+    divs.forEach(function (d) {
+      var name = esc(DIV[d.division] || d.division);
+      if (d.round != null) {
+        var day2 = d.day1 && d.round > d.day1;
+        st += '<span class="pill">' + name + ': <b>Rodada ' + d.round + (d.day1 && !day2 ? '/' + d.day1 : '') + '</b>' + (day2 ? ' (dia 2)' : '') +
+          (d.tablesLive > 0 ? ' · ' + num(d.tablesLive) + ' mesas jogando' : ' · encerrada') + '</span>';
+      }
+      var ps = (d.players || []).slice();
+      if (!ps.length) return;
+      ps.sort(function (a, b) { return (a.missing ? 1 : 0) - (b.missing ? 1 : 0) || (a.rank || 0) - (b.rank || 0); });
+      html += '<h2>' + name + (d.total ? ' · ' + num(d.total) + ' jogadores' : '') + '</h2>';
+      ps.forEach(function (p) { html += card(p, d); });
+    });
+    document.getElementById('status').innerHTML = st;
+    var list = document.getElementById('list');
+    list.innerHTML = html || '<p class="empty">Sem dados ainda.</p>';
+    Array.prototype.forEach.call(list.querySelectorAll('article[data-k]'), function (el) {
+      var det = el.querySelector('details');
+      if (det && open[el.getAttribute('data-k')]) det.open = true;
+    });
+    tick();
+  }
+
+  function tick() {
+    if (!last) return;
+    var divs = last.divisions || [];
+    var src = divs.map(function (d) { return d.sourceUpdated; }).filter(Boolean);
+    var newest = src.length ? Math.max.apply(null, src) : last.generatedAt;
+    var live = divs.some(function (d) { return d.tablesLive > 0; });
+    var text = newest ? ' Standings das ' + clock(newest) + ' (' + ago(Date.now() - newest) + ').' : '';
+    if (live && newest && Date.now() - newest > STALE_MS) text += ' Pode estar atrasado: confira no pokedata.';
+    document.getElementById('age').textContent = text;
+  }
+
+  function load() {
+    fetch('data.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(render)
+      .catch(function () {
+        if (!last) document.getElementById('list').innerHTML = '<p class="empty">Não foi possível carregar os dados. Tentando de novo…</p>';
+        document.getElementById('age').textContent = ' Sem conexão; tentando de novo.';
+      });
+  }
+  load();
+  setInterval(load, 30000);
+  setInterval(tick, 15000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+})();
+</script>
+</body>
+</html>

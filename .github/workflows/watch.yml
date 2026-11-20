@@ -1,0 +1,67 @@
+name: Atualiza standings
+
+# One long-running job polls the standings once a minute and commits data.json
+# to gh-pages when a tracked player's result changes. It restarts itself before
+# the 6 h job limit; the cron is only a watchdog in case the chain breaks.
+
+on:
+  push:
+    branches: [gh-pages]
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=true
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            others=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/watch.yml/runs?per_page=30" \
+              --jq "[.workflow_runs[] | select(.status != \"completed\" and .id != $GITHUB_RUN_ID)] | length" || echo 0)
+            if [ "$others" != "0" ]; then run=false; fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  watch:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    concurrency:
+      group: standings-watch
+      cancel-in-progress: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Watch standings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/update.mjs --watch 320
+
+      - name: Hand over to the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ends=$(node -p "Date.parse(require('./players.json').endsAt || '') || 0")
+          now=$(node -p "Date.now()")
+          if [ "$ends" != "0" ] && [ "$now" -ge "$ends" ]; then
+            echo "Tournament is over: disabling this workflow."
+            gh workflow disable watch.yml --repo "$GITHUB_REPOSITORY" || true
+          else
+            gh workflow run watch.yml --repo "$GITHUB_REPOSITORY" --ref gh-pages
+          fi
