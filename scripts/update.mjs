@@ -67,8 +67,19 @@ export function summarize(json, division, tracked) {
     }
   }
   const T = json.tournament || {};
+  // Rounds after the day 1 + day 2 swiss are the top cut. Its size changes from
+  // event to event (and top seeds can get byes), so each round is named after
+  // how many players are still in it.
+  const topCut = {};
+  if (T.day1) {
+    for (let n = T.day1 + (T.day2 || 0) + 1; n <= round; n++) {
+      const alive = players.filter((p) => Array.isArray(p.r) && p.r.length >= n).length;
+      if (alive > 32) continue; // not a top cut: the published day 2 length must be off
+      topCut[n] = alive <= 2 ? 'Final' : alive <= 4 ? 'Top 4' : alive <= 8 ? 'Top 8' : alive <= 16 ? 'Top 16' : 'Top 32';
+    }
+  }
   return {
-    division, round, day1: T.day1 || null, day2: T.day2 || null,
+    division, round, day1: T.day1 || null, day2: T.day2 || null, topCut,
     tablesLive: Math.round(live / 2), total: players.length,
     title: T.title || null, date: T.date || null,
     players: out,
@@ -105,7 +116,7 @@ async function refresh(division) {
 // generatedAt doubles as the heartbeat the page uses to tell the poller is alive.
 const build = () => ({
   generatedAt: Date.now(), sourcePage: SOURCE_PAGE,
-  divisions: DIVISIONS.map((d) => ({ ...cache.get(d).summary, sourceUpdated: cache.get(d).sourceUpdated })),
+  divisions: DIVISIONS.map((d) => ({ ...cache.get(d).summary, day2Points: CONFIG.day2Points || null, sourceUpdated: cache.get(d).sourceUpdated })),
 });
 
 const headline = (data) => data.divisions.map((d) => d.division + ' R' + d.round + ': ' +

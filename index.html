@@ -45,11 +45,17 @@
   .flag { width:20px; height:15px; border-radius:2px; vertical-align:-2px; margin-right:6px; font-size:.7rem; color:var(--dim); }
   .chips .flag { width:16px; height:12px; margin:0 0 0 5px; vertical-align:-1px; }
   .note { margin: 8px 0 0; font-size:.78rem; color: var(--tie); }
+  .quali { margin: 8px 0 0; font-size:.82rem; color: var(--dim); }
+  .quali.ok { color: var(--win); }
+  .quali.champ { color: var(--tie); font-weight: 650; }
+  .chips li.brk { margin-left: 9px; }
+  tr.brk td { border-top: 1px solid var(--line); padding-top: 7px; }
+  .card.over { opacity: .72; }
   details { margin-top: 9px; border-top:1px solid var(--line); padding-top: 8px; }
   summary { cursor:pointer; color:var(--dim); font-size:.8rem; }
   table { width:100%; border-collapse:collapse; margin-top:6px; font-size:.84rem; }
   td { padding: 4px 6px 4px 0; vertical-align:top; overflow-wrap:anywhere; }
-  td.r { color:var(--dim); width:2.4em; } td.res { width:1.6em; font-weight:700; } td.tb { color:var(--dim); text-align:right; white-space:nowrap; }
+  td.r { color:var(--dim); width:2.4em; white-space:nowrap; padding-right:10px; } td.res { width:1.6em; font-weight:700; } td.tb { color:var(--dim); text-align:right; white-space:nowrap; }
   .W { color: var(--win); } .L { color: var(--loss); } .T { color: var(--tie); } .LIVE { color: var(--live); }
   .dim { color: var(--dim); }
   footer { color:var(--dim); font-size:.76rem; margin-top: 26px; }
@@ -111,6 +117,54 @@
     return flag(r.opponent.country) + esc(r.opponent.name) + ' <span class="dim">(' + esc(r.opponent.record) + ')</span>';
   }
 
+  // Rounds: day 1 swiss, then day 2 swiss, then the top cut (named by the poller).
+  function isTop(d, n) { return !!(d.topCut && d.topCut[n]); }
+  function roundName(d, n) { return isTop(d, n) ? d.topCut[n] : 'R' + n; }
+  function phase(d, n) { return isTop(d, n) ? 'top' : (d.day1 && n > d.day1 ? 'day2' : 'day1'); }
+  function topStarted(d) { return !!d.topCut && Object.keys(d.topCut).length > 0; }
+
+  // Where the player stands in the tournament structure: one line under the
+  // chips. Returns { html, over } where over means "this player is done".
+  function standing(p, d) {
+    var rounds = p.rounds || [];
+    var place = 'terminou em #' + num(p.rank);
+    if (p.droppedAfter != null) return { html: '<p class="note">Drop após a rodada ' + p.droppedAfter + '.</p>', over: true };
+    if (!d.day1 || !d.round) return { html: '', over: false };
+
+    if (d.round <= d.day1) { // day 1 running, or finished with no day 2 pairings yet
+      var html = '';
+      if (rounds.length < d.round) html += '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>';
+      var cut = d.day2Points;
+      if (!cut) return { html: html, over: false };
+      var done = rounds.filter(function (r) { return r.result !== 'LIVE'; }).length;
+      var left = Math.max(0, d.day1 - done);
+      var dayOver = d.round === d.day1 && !(d.tablesLive > 0);
+      if (p.points >= cut) {
+        html += '<p class="quali ok">✓ ' + (dayOver ? 'Classificado para o dia 2' : 'Dia 2 garantido') + ' (' + cut + '+ pts)</p>';
+      } else if (p.points + 3 * left < cut) {
+        html += '<p class="quali">' + (left === 0 ? 'Não avançou ao dia 2' : 'Sem chance de dia 2') + ' (corte: ' + cut + ' pts)</p>';
+        return { html: html, over: left === 0 };
+      } else {
+        html += '<p class="quali">Dia 2: faltam ' + (cut - p.points) + ' pts em ' + left + (left === 1 ? ' rodada' : ' rodadas') + '</p>';
+      }
+      return { html: html, over: false };
+    }
+
+    if (rounds.length <= d.day1) return { html: '<p class="quali">Não avançou ao dia 2 · ' + place + '</p>', over: true };
+
+    var topRounds = rounds.filter(function (r) { return isTop(d, r.n); });
+    if (topRounds.length) {
+      var lastTop = topRounds[topRounds.length - 1];
+      if (lastTop.result === 'L' && roundName(d, lastTop.n) === 'Final') return { html: '<p class="quali champ">🥈 Vice-campeão</p>', over: false };
+      if (lastTop.result === 'L') return { html: '<p class="quali">Eliminado no ' + esc(roundName(d, lastTop.n)) + ' · ' + place + '</p>', over: true };
+      if (lastTop.result === 'W' && roundName(d, lastTop.n) === 'Final') return { html: '<p class="quali champ">🏆 Campeão!</p>', over: false };
+      return { html: '<p class="quali ok">No top cut</p>', over: false };
+    }
+    if (topStarted(d)) return { html: '<p class="quali">Fim do dia 2 · ' + place + '</p>', over: true };
+    if (rounds.length < d.round) return { html: '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>', over: false };
+    return { html: '<p class="quali ok">No dia 2</p>', over: false };
+  }
+
   function card(p, d) {
     if (p.missing) {
       return '<article class="card"><p class="name">' + esc(p.name) + '</p><p class="meta">Não encontrado nos standings de ' + esc(DIV[d.division] || d.division) + '.</p></article>';
@@ -118,38 +172,56 @@
     var rounds = p.rounds || [];
     var cur = rounds.length ? rounds[rounds.length - 1] : null;
     var playing = !!cur && cur.result === 'LIVE';
-    var h = '<article class="card' + (playing ? ' playing' : '') + '" data-k="' + esc(d.division + '#' + p.id) + '">';
+    var st = standing(p, d);
+    var h = '<article class="card' + (playing ? ' playing' : '') + (st.over && !playing ? ' over' : '') + '" data-k="' + esc(d.division + '#' + p.id) + '">';
     h += '<div class="top"><div><p class="name">' + esc(p.name) + '</p>';
     h += '<p class="meta">#' + num(p.rank) + ' de ' + num(d.total) + ' · ' + p.points + ' pts</p></div>';
     h += '<div class="rec" aria-label="Vitórias, derrotas, empates">' + p.record[0] + '<i>-</i>' + p.record[1] + '<i>-</i>' + p.record[2] + '</div></div>';
     if (rounds.length) {
       h += '<ol class="chips">';
-      rounds.forEach(function (r) {
+      rounds.forEach(function (r, i) {
+        var brk = i > 0 && phase(d, r.n) !== phase(d, rounds[i - 1].n);
         var title = r.bye ? 'Bye (vitória automática)' : (!r.opponent && r.result === 'L' ? 'Sem pareamento (derrota)' : WORD[r.result] || '');
-        h += '<li class="' + esc(r.result) + '" title="' + esc(title) + '">R' + r.n + ' ' + (r.bye ? 'BYE' : (LABEL[r.result] || '?')) + (r.opponent ? flag(r.opponent.country) : '') + '</li>';
+        h += '<li class="' + esc(r.result) + (brk ? ' brk' : '') + '" title="' + esc(title) + '">' + esc(roundName(d, r.n)) + ' ' +
+          (r.bye ? 'BYE' : (LABEL[r.result] || '?')) + (r.opponent ? flag(r.opponent.country) : '') + '</li>';
       });
       h += '</ol>';
     }
     if (playing) {
-      h += '<p class="nowline"><span class="dot">●</span> Jogando a R' + cur.n + (cur.table ? ' · mesa ' + cur.table : '') + ' · vs ' + versus(cur) + '</p>';
+      h += '<p class="nowline"><span class="dot">●</span> Jogando ' + (isTop(d, cur.n) ? 'o ' : 'a ') + esc(roundName(d, cur.n)) + (cur.table ? ' · mesa ' + cur.table : '') + ' · vs ' + versus(cur) + '</p>';
     } else if (cur && cur.bye && cur.n === d.round && d.tablesLive > 0) {
-      h += '<p class="nowline"><span class="W">●</span> Bye na R' + cur.n + ' · vitória automática, sem mesa</p>';
+      h += '<p class="nowline"><span class="W">●</span> Bye ' + (isTop(d, cur.n) ? 'no ' : 'na ') + esc(roundName(d, cur.n)) + ' · vitória automática, sem mesa</p>';
     }
-    if (p.droppedAfter != null) h += '<p class="note">Drop após a rodada ' + p.droppedAfter + '.</p>';
-    else if (d.round && rounds.length < d.round) {
-      if (d.day1 && d.round > d.day1 && rounds.length <= d.day1) h += '<p class="note">Não está no dia 2.</p>';
-      else h += '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>';
-    }
+    h += st.html;
     if (p.homonyms > 1) h += '<p class="note">' + p.homonyms + ' jogadores com este nome no torneio (id ' + p.id + ').</p>';
     if (rounds.length) {
       h += '<details><summary>Rodadas</summary><table>';
-      rounds.forEach(function (r) {
-        h += '<tr><td class="r">R' + r.n + '</td><td class="res ' + esc(r.result) + '">' + (LABEL[r.result] || '?') + '</td><td>' + versus(r) + '</td>';
+      rounds.forEach(function (r, i) {
+        var brk = i > 0 && phase(d, r.n) !== phase(d, rounds[i - 1].n);
+        h += '<tr' + (brk ? ' class="brk"' : '') + '><td class="r">' + esc(roundName(d, r.n)) + '</td><td class="res ' + esc(r.result) + '">' + (LABEL[r.result] || '?') + '</td><td>' + versus(r) + '</td>';
         h += '<td class="tb">' + (r.table ? 'mesa ' + r.table : '') + '</td></tr>';
       });
       h += '</table></details>';
     }
     return h + '</article>';
+  }
+
+  // Header pill: which round the division is in.
+  function pill(d) {
+    var name = esc(DIV[d.division] || d.division);
+    var live = d.tablesLive > 0;
+    var text;
+    if (isTop(d, d.round)) {
+      var label = d.topCut[d.round];
+      text = '<b>' + esc(label) + '</b> · ' + (live ? 'jogando' : (label === 'Final' ? 'torneio encerrado' : 'encerrado'));
+    } else if (d.day1 && d.round > d.day1) {
+      text = 'Dia 2 · <b>Rodada ' + d.round + (d.day2 ? '/' + (d.day1 + d.day2) : '') + '</b> · ' + (live ? num(d.tablesLive) + ' mesas jogando' : 'encerrada');
+    } else if (d.day1 && d.round === d.day1 && !live) {
+      text = '<b>Dia 1 encerrado</b> · ' + d.day1 + ' rodadas';
+    } else {
+      text = '<b>Rodada ' + d.round + (d.day1 ? '/' + d.day1 : '') + '</b> · ' + (live ? num(d.tablesLive) + ' mesas jogando' : 'encerrada');
+    }
+    return '<span class="pill">' + name + ': ' + text + '</span>';
   }
 
   function render(s) {
@@ -169,11 +241,7 @@
     var html = '';
     divs.forEach(function (d) {
       var name = esc(DIV[d.division] || d.division);
-      if (d.round != null) {
-        var day2 = d.day1 && d.round > d.day1;
-        st += '<span class="pill">' + name + ': <b>Rodada ' + d.round + (d.day1 && !day2 ? '/' + d.day1 : '') + '</b>' + (day2 ? ' (dia 2)' : '') +
-          (d.tablesLive > 0 ? ' · ' + num(d.tablesLive) + ' mesas jogando' : ' · encerrada') + '</span>';
-      }
+      if (d.round != null) st += pill(d);
       var ps = (d.players || []).slice();
       if (!ps.length) return;
       ps.sort(function (a, b) { return (a.missing ? 1 : 0) - (b.missing ? 1 : 0) || (a.rank || 0) - (b.rank || 0); });

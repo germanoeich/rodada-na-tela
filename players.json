@@ -1,6 +1,7 @@
 {
   "tournamentId": "1000087",
   "endsAt": "2026-11-23T09:00:00Z",
+  "day2Points": 16,
   "players": [
     { "division": "Masters", "name": "Emerson Douglas Neves" },
     { "division": "Masters", "name": "Vitor Moreira Neves" },
