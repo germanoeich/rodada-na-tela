@@ -1,5 +1,5 @@
 {
- "generatedAt": 1795190489628,
+ "generatedAt": 1795190628693,
  "sourcePage": "https://www.pokedata.ovh/standings2/1000087",
  "divisions": [
   {
@@ -7,7 +7,7 @@
    "round": 3,
    "day1": 8,
    "day2": 6,
-   "tablesLive": 479,
+   "tablesLive": 240,
    "total": 2647,
    "title": "2027 Latin America Pokémon TCG International Championships",
    "date": "November 20-22, 2026",
@@ -16,7 +16,7 @@
      "name": "Emerson Douglas Neves",
      "country": "BR",
      "id": 805,
-     "rank": 1631,
+     "rank": 1723,
      "record": [
       1,
       2,
@@ -68,7 +68,7 @@
      "name": "Vitor Moreira Neves",
      "country": "BR",
      "id": 1334,
-     "rank": 39,
+     "rank": 115,
      "record": [
       3,
       0,
@@ -87,7 +87,7 @@
         "id": 1335,
         "name": "Jose Avalos",
         "country": "MX",
-        "record": "1-1-0"
+        "record": "1-2-0"
        }
       },
       {
@@ -120,7 +120,7 @@
      "name": "Lucas Portal de Almeida Neto",
      "country": "BR",
      "id": 1322,
-     "rank": 746,
+     "rank": 811,
      "record": [
       2,
       1,
@@ -172,13 +172,13 @@
      "name": "Matheus Nunes",
      "country": "BR",
      "id": 184,
-     "rank": 1550,
+     "rank": 719,
      "record": [
-      1,
+      2,
       1,
       0
      ],
-     "points": 3,
+     "points": 6,
      "droppedAfter": null,
      "homonyms": 1,
      "rounds": [
@@ -191,7 +191,7 @@
         "id": 185,
         "name": "Nelson Hector Gutierrez Viggiano",
         "country": "AR",
-        "record": "0-2-0"
+        "record": "0-3-0"
        }
       },
       {
@@ -203,19 +203,19 @@
         "id": 2429,
         "name": "Gareth Murphy",
         "country": "AU",
-        "record": "2-0-0"
+        "record": "3-0-0"
        }
       },
       {
        "n": 3,
-       "result": "LIVE",
+       "result": "W",
        "table": 985,
        "bye": false,
        "opponent": {
         "id": 457,
         "name": "LUCAS TEIXEIRA",
         "country": "BR",
-        "record": "1-1-0"
+        "record": "1-2-0"
        }
       }
      ]
@@ -224,7 +224,7 @@
      "name": "Luiz Reis",
      "country": "BR",
      "id": 1584,
-     "rank": 810,
+     "rank": 901,
      "record": [
       2,
       1,
@@ -276,7 +276,7 @@
      "name": "Luiz Reis",
      "country": "BR",
      "id": 2239,
-     "rank": 2507,
+     "rank": 2541,
      "record": [
       0,
       3,
@@ -328,7 +328,7 @@
      "name": "Riquelme Pereira Spolavori",
      "country": "BR",
      "id": 664,
-     "rank": 497,
+     "rank": 546,
      "record": [
       2,
       1,
@@ -377,14 +377,14 @@
      ]
     }
    ],
-   "sourceUpdated": 1795190236000
+   "sourceUpdated": 1795190589000
   },
   {
    "division": "Senior",
    "round": 3,
    "day1": 8,
    "day2": 3,
-   "tablesLive": 153,
+   "tablesLive": 9,
    "total": 310,
    "title": "2027 Latin America Pokémon TCG International Championships",
    "date": "November 20-22, 2026",
@@ -393,13 +393,13 @@
      "name": "Lucca v.",
      "country": "BR",
      "id": 60,
-     "rank": 49,
+     "rank": 10,
      "record": [
-      2,
+      3,
       0,
       0
      ],
-     "points": 6,
+     "points": 9,
      "droppedAfter": null,
      "homonyms": 1,
      "rounds": [
@@ -412,7 +412,7 @@
         "id": 61,
         "name": "Vinícius d.",
         "country": "BR",
-        "record": "0-1-1"
+        "record": "0-2-1"
        }
       },
       {
@@ -424,25 +424,25 @@
         "id": 124,
         "name": "Lucas N.",
         "country": "US",
-        "record": "1-1-0"
+        "record": "2-1-0"
        }
       },
       {
        "n": 3,
-       "result": "LIVE",
+       "result": "W",
        "table": 155,
        "bye": false,
        "opponent": {
         "id": 33,
         "name": "Levi V.",
         "country": "BR",
-        "record": "2-0-0"
+        "record": "2-1-0"
        }
       }
      ]
     }
    ],
-   "sourceUpdated": 1795190242000
+   "sourceUpdated": 1795190595000
   }
  ]
 }
