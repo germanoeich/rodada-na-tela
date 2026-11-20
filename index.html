@@ -25,6 +25,9 @@
   .pill b { color: var(--ink); font-weight: 600; }
   .pill.warn { border-color: var(--tie); color: var(--tie); }
   h2 { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); margin: 22px 0 8px; font-weight:600; }
+  h3 { font-size:.8rem; color:var(--ink); margin: 16px 0 8px; font-weight:600; }
+  h3 span { color:var(--dim); font-weight:400; }
+  h2 + h3 { margin-top: 4px; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius: 12px; padding: 13px 14px; }
   .card.playing { border-color: var(--live); }
   .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
@@ -117,51 +120,91 @@
     return flag(r.opponent.country) + esc(r.opponent.name) + ' <span class="dim">(' + esc(r.opponent.record) + ')</span>';
   }
 
-  // Rounds: day 1 swiss, then day 2 swiss, then the top cut (named by the poller).
+  // Rounds: phase 1 swiss, then phase 2 swiss, then the top cut (named by the poller).
   function isTop(d, n) { return !!(d.topCut && d.topCut[n]); }
   function roundName(d, n) { return isTop(d, n) ? d.topCut[n] : 'R' + n; }
   function phase(d, n) { return isTop(d, n) ? 'top' : (d.day1 && n > d.day1 ? 'day2' : 'day1'); }
   function topStarted(d) { return !!d.topCut && Object.keys(d.topCut).length > 0; }
 
+  // Masters play all of phase 1 on Friday, so the phases are "dia 1" and "dia 2".
+  // Seniors and Juniors stop at round 6 on Friday and finish phase 1 on Saturday,
+  // so for them the same two phases are called "fase 1" and "fase 2".
+  function words(d) {
+    return d.division === 'Masters'
+      ? { P2: 'Dia 2', doP2: 'do dia 2', noP2: 'no dia 2', aoP2: 'ao dia 2', oP2: 'o dia 2', noP1: 'no dia 1', p1Over: 'Dia 1 encerrado' }
+      : { P2: 'Fase 2', doP2: 'da fase 2', noP2: 'na fase 2', aoP2: 'à fase 2', oP2: 'a fase 2', noP1: 'na fase 1', p1Over: 'Fase 1 encerrada' };
+  }
+  function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  function phase1Over(d) { return !!d.day1 && d.round === d.day1 && !(d.tablesLive > 0); }
+
   // Where the player stands in the tournament structure: one line under the
-  // chips. Returns { html, over } where over means "this player is done".
+  // chips. Returns { html, over, group }: over means "this player is done";
+  // group is the section the card goes in (active, outTop, out2 or out1).
   function standing(p, d) {
     var rounds = p.rounds || [];
+    var w = words(d);
     var place = 'terminou em #' + num(p.rank);
-    if (p.droppedAfter != null) return { html: '<p class="note">Drop após a rodada ' + p.droppedAfter + '.</p>', over: true };
-    if (!d.day1 || !d.round) return { html: '', over: false };
+    var beyond1 = !!d.day1 && rounds.length > d.day1;
+    var inTop = rounds.some(function (r) { return isTop(d, r.n); });
+    var outGroup = inTop ? 'outTop' : (beyond1 ? 'out2' : 'out1');
+    // Once the next phase is paired, the source can flag everybody who is not in
+    // it as "dropped" after the previous phase's last round. That is the cut, not a drop.
+    var swiss = d.day1 ? d.day1 + (d.day2 || 0) : 0;
+    var drop = p.droppedAfter;
+    var cutNotDrop = drop != null && !!d.day1 && ((drop === d.day1 && d.round > d.day1) || (drop === swiss && d.round > swiss));
+    if (drop != null && !cutNotDrop) return { html: '<p class="note">Drop após a rodada ' + drop + '.</p>', over: true, group: outGroup };
+    if (!d.day1 || !d.round) return { html: '', over: false, group: 'active' };
+    var cut = d.day2Points;
 
-    if (d.round <= d.day1) { // day 1 running, or finished with no day 2 pairings yet
+    if (d.round <= d.day1) { // phase 1 running, or finished with no phase 2 pairings yet
       var html = '';
       if (rounds.length < d.round) html += '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>';
-      var cut = d.day2Points;
-      if (!cut) return { html: html, over: false };
+      if (!cut) return { html: html, over: false, group: 'active' };
       var done = rounds.filter(function (r) { return r.result !== 'LIVE'; }).length;
       var left = Math.max(0, d.day1 - done);
       if (p.points >= cut) {
-        html += '<p class="quali ok">✓ Atingiu o corte do dia 2 (' + cut + '+ pts)</p>';
+        html += '<p class="quali ok">✓ Atingiu o corte ' + w.doP2 + ' (' + cut + '+ pts)</p>';
       } else if (p.points + 3 * left < cut) {
-        html += '<p class="quali">' + (left === 0 ? 'Abaixo do corte do dia 2' : 'Não alcança mais o corte do dia 2') + ' (' + cut + ' pts)</p>';
-        return { html: html, over: left === 0 };
+        html += '<p class="quali">' + (left === 0 ? 'Abaixo do corte ' : 'Não alcança mais o corte ') + w.doP2 + ' (' + cut + ' pts)</p>';
+        return { html: html, over: left === 0, group: left === 0 ? 'out1' : 'active' };
       } else {
-        html += '<p class="quali">Dia 2: faltam ' + (cut - p.points) + ' pts em ' + left + (left === 1 ? ' rodada' : ' rodadas') + '</p>';
+        var need = cut - p.points;
+        html += '<p class="quali">' + w.P2 + ': ' + (need === 1 ? 'falta 1 pt' : 'faltam ' + need + ' pts') + ' em ' + left + (left === 1 ? ' rodada' : ' rodadas') + '</p>';
       }
-      return { html: html, over: false };
+      return { html: html, over: false, group: 'active' };
     }
 
-    if (rounds.length <= d.day1) return { html: '<p class="quali">Não avançou ao dia 2 · ' + place + '</p>', over: true };
+    if (!beyond1) {
+      // Reached the cut but has no phase 2 pairing: did not show up for it.
+      var p1 = 0;
+      rounds.slice(0, d.day1).forEach(function (r) { p1 += r.result === 'W' ? 3 : (r.result === 'T' ? 1 : 0); });
+      var text = cut && p1 >= cut ? 'Não jogou ' + w.oP2 : 'Não avançou ' + w.aoP2;
+      return { html: '<p class="quali">' + text + ' · ' + place + '</p>', over: true, group: 'out1' };
+    }
 
-    var topRounds = rounds.filter(function (r) { return isTop(d, r.n); });
-    if (topRounds.length) {
+    if (inTop) {
+      var topRounds = rounds.filter(function (r) { return isTop(d, r.n); });
       var lastTop = topRounds[topRounds.length - 1];
-      if (lastTop.result === 'L' && roundName(d, lastTop.n) === 'Final') return { html: '<p class="quali champ">🥈 Vice-campeão</p>', over: false };
-      if (lastTop.result === 'L') return { html: '<p class="quali">Eliminado no ' + esc(roundName(d, lastTop.n)) + ' · ' + place + '</p>', over: true };
-      if (lastTop.result === 'W' && roundName(d, lastTop.n) === 'Final') return { html: '<p class="quali champ">🏆 Campeão!</p>', over: false };
-      return { html: '<p class="quali ok">No top cut</p>', over: false };
+      if (lastTop.result === 'L' && roundName(d, lastTop.n) === 'Final') return { html: '<p class="quali champ">🥈 Vice-campeão</p>', over: false, group: 'active' };
+      if (lastTop.result === 'L') return { html: '<p class="quali">Eliminado no ' + esc(roundName(d, lastTop.n)) + ' · ' + place + '</p>', over: true, group: 'outTop' };
+      if (lastTop.result === 'W' && roundName(d, lastTop.n) === 'Final') return { html: '<p class="quali champ">🏆 Campeão!</p>', over: false, group: 'active' };
+      return { html: '<p class="quali ok">No top cut</p>', over: false, group: 'active' };
     }
-    if (topStarted(d)) return { html: '<p class="quali">Fim do dia 2 · ' + place + '</p>', over: true };
-    if (rounds.length < d.round) return { html: '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>', over: false };
-    return { html: '<p class="quali ok">No dia 2</p>', over: false };
+    if (topStarted(d) || d.round > swiss) return { html: '<p class="quali">Fim ' + w.doP2 + ' · ' + place + '</p>', over: true, group: 'out2' };
+    if (rounds.length < d.round) return { html: '<p class="note">Sem pareamento na rodada ' + d.round + '.</p>', over: false, group: 'active' };
+    return { html: '<p class="quali ok">' + cap(w.noP2) + '</p>', over: false, group: 'active' };
+  }
+
+  // Section titles inside a division: who is still in, and where the others stopped.
+  function groupTitle(g, d) {
+    var w = words(d);
+    if (g === 'outTop') return 'Eliminados no top cut';
+    if (g === 'out2') return 'Encerraram ' + w.noP2;
+    if (g === 'out1') return 'Encerraram ' + w.noP1;
+    if (topStarted(d)) return 'No top cut';
+    if (d.day1 && d.round > d.day1) return cap(w.noP2);
+    if (phase1Over(d)) return 'Atingiram o corte ' + w.doP2;
+    return 'Em jogo';
   }
 
   function card(p, d) {
@@ -214,9 +257,9 @@
       var label = d.topCut[d.round];
       text = '<b>' + esc(label) + '</b> · ' + (live ? 'jogando' : (label === 'Final' ? 'torneio encerrado' : 'encerrado'));
     } else if (d.day1 && d.round > d.day1) {
-      text = 'Dia 2 · <b>Rodada ' + d.round + (d.day2 ? '/' + (d.day1 + d.day2) : '') + '</b> · ' + (live ? num(d.tablesLive) + ' mesas jogando' : 'encerrada');
-    } else if (d.day1 && d.round === d.day1 && !live) {
-      text = '<b>Dia 1 encerrado</b> · ' + d.day1 + ' rodadas';
+      text = words(d).P2 + ' · <b>Rodada ' + d.round + (d.day2 ? '/' + (d.day1 + d.day2) : '') + '</b> · ' + (live ? num(d.tablesLive) + ' mesas jogando' : 'encerrada');
+    } else if (phase1Over(d)) {
+      text = '<b>' + words(d).p1Over + '</b> · ' + d.day1 + ' rodadas';
     } else {
       text = '<b>Rodada ' + d.round + (d.day1 ? '/' + d.day1 : '') + '</b> · ' + (live ? num(d.tablesLive) + ' mesas jogando' : 'encerrada');
     }
@@ -244,9 +287,18 @@
       var ps = (d.players || []).slice();
       if (!ps.length) return;
       ps.sort(function (a, b) { return (a.missing ? 1 : 0) - (b.missing ? 1 : 0) || (a.rank || 0) - (b.rank || 0); });
-      html += '<h2>' + name + (d.total ? ' · ' + num(d.total) + ' jogadores' : '') + '</h2><div class="grid">';
-      ps.forEach(function (p) { html += card(p, d); });
-      html += '</div>';
+      html += '<h2>' + name + (d.total ? ' · ' + num(d.total) + ' jogadores' : '') + '</h2>';
+      var groups = { active: [], outTop: [], out2: [], out1: [] };
+      ps.forEach(function (p) { groups[p.missing ? 'active' : standing(p, d).group].push(p); });
+      var order = ['active', 'outTop', 'out2', 'out1'].filter(function (g) { return groups[g].length; });
+      // One plain list while everybody is still in phase 1; titled sections after that.
+      var titled = order.length > 1 || order[0] !== 'active' || (d.day1 && d.round > d.day1) || phase1Over(d);
+      order.forEach(function (g) {
+        if (titled) html += '<h3>' + esc(groupTitle(g, d)) + ' <span>· ' + groups[g].length + '</span></h3>';
+        html += '<div class="grid">';
+        groups[g].forEach(function (p) { html += card(p, d); });
+        html += '</div>';
+      });
     });
     document.getElementById('status').innerHTML = st;
     var list = document.getElementById('list');
