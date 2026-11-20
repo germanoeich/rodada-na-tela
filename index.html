@@ -42,6 +42,8 @@
   @media (prefers-reduced-motion: reduce) { .chips .LIVE { animation:none; } }
   .nowline { margin: 9px 0 0; font-size:.88rem; overflow-wrap:anywhere; }
   .nowline .dot { color: var(--live); }
+  .flag { width:20px; height:15px; border-radius:2px; vertical-align:-2px; margin-right:6px; font-size:.7rem; color:var(--dim); }
+  .chips .flag { width:16px; height:12px; margin:0 0 0 5px; vertical-align:-1px; }
   .note { margin: 8px 0 0; font-size:.78rem; color: var(--tie); }
   details { margin-top: 9px; border-top:1px solid var(--line); padding-top: 8px; }
   summary { cursor:pointer; color:var(--dim); font-size:.8rem; }
@@ -90,10 +92,23 @@
     if (m < 90) return 'há ' + m + ' min';
     return 'há ' + Math.round(m / 60) + ' h';
   }
+  var regionNames = null;
+  try { regionNames = new Intl.DisplayNames(['pt-BR'], { type: 'region' }); } catch (e) {}
+  // Flag of an ISO country code (the standings use "UK" for the United Kingdom).
+  // If the image cannot load, its alt text (the code) is shown instead.
+  function flag(code) {
+    if (!code || !/^[A-Za-z]{2}$/.test(code)) return '';
+    var iso = code.toUpperCase() === 'UK' ? 'GB' : code.toUpperCase();
+    var name = iso;
+    try { if (regionNames) name = regionNames.of(iso) || iso; } catch (e) {}
+    var base = 'https://flagcdn.com/';
+    var file = '/' + iso.toLowerCase() + '.png';
+    return '<img class="flag" src="' + base + '20x15' + file + '" srcset="' + base + '40x30' + file + ' 2x" width="20" height="15" alt="' + esc(iso) + '" title="' + esc(name) + '" loading="lazy">';
+  }
   function versus(r) {
     if (r.bye) return 'bye';
     if (!r.opponent) return 'sem oponente';
-    return esc(r.opponent.name) + ' <span class="dim">(' + esc(r.opponent.record) + ')</span>';
+    return flag(r.opponent.country) + esc(r.opponent.name) + ' <span class="dim">(' + esc(r.opponent.record) + ')</span>';
   }
 
   function card(p, d) {
@@ -109,7 +124,7 @@
     h += '<div class="rec" aria-label="Vitórias, derrotas, empates">' + p.record[0] + '<i>-</i>' + p.record[1] + '<i>-</i>' + p.record[2] + '</div></div>';
     if (rounds.length) {
       h += '<ol class="chips">';
-      rounds.forEach(function (r) { h += '<li class="' + esc(r.result) + '" title="' + esc(WORD[r.result] || '') + '">R' + r.n + ' ' + (LABEL[r.result] || '?') + '</li>'; });
+      rounds.forEach(function (r) { h += '<li class="' + esc(r.result) + '" title="' + esc(WORD[r.result] || '') + '">R' + r.n + ' ' + (LABEL[r.result] || '?') + (r.opponent ? flag(r.opponent.country) : '') + '</li>'; });
       h += '</ol>';
     }
     if (playing) {
