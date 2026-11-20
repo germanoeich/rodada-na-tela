@@ -106,8 +106,8 @@
     return '<img class="flag" src="' + base + '20x15' + file + '" srcset="' + base + '40x30' + file + ' 2x" width="20" height="15" alt="' + esc(iso) + '" title="' + esc(name) + '" loading="lazy">';
   }
   function versus(r) {
-    if (r.bye) return 'bye';
-    if (!r.opponent) return 'sem oponente';
+    if (r.bye) return 'bye <span class="dim">(vitória automática)</span>';
+    if (!r.opponent) return '<span class="dim">sem pareamento (derrota)</span>';
     return flag(r.opponent.country) + esc(r.opponent.name) + ' <span class="dim">(' + esc(r.opponent.record) + ')</span>';
   }
 
@@ -124,11 +124,16 @@
     h += '<div class="rec" aria-label="Vitórias, derrotas, empates">' + p.record[0] + '<i>-</i>' + p.record[1] + '<i>-</i>' + p.record[2] + '</div></div>';
     if (rounds.length) {
       h += '<ol class="chips">';
-      rounds.forEach(function (r) { h += '<li class="' + esc(r.result) + '" title="' + esc(WORD[r.result] || '') + '">R' + r.n + ' ' + (LABEL[r.result] || '?') + (r.opponent ? flag(r.opponent.country) : '') + '</li>'; });
+      rounds.forEach(function (r) {
+        var title = r.bye ? 'Bye (vitória automática)' : (!r.opponent && r.result === 'L' ? 'Sem pareamento (derrota)' : WORD[r.result] || '');
+        h += '<li class="' + esc(r.result) + '" title="' + esc(title) + '">R' + r.n + ' ' + (r.bye ? 'BYE' : (LABEL[r.result] || '?')) + (r.opponent ? flag(r.opponent.country) : '') + '</li>';
+      });
       h += '</ol>';
     }
     if (playing) {
       h += '<p class="nowline"><span class="dot">●</span> Jogando a R' + cur.n + (cur.table ? ' · mesa ' + cur.table : '') + ' · vs ' + versus(cur) + '</p>';
+    } else if (cur && cur.bye && cur.n === d.round && d.tablesLive > 0) {
+      h += '<p class="nowline"><span class="W">●</span> Bye na R' + cur.n + ' · vitória automática, sem mesa</p>';
     }
     if (p.droppedAfter != null) h += '<p class="note">Drop após a rodada ' + p.droppedAfter + '.</p>';
     else if (d.round && rounds.length < d.round) {
