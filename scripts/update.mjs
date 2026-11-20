@@ -1,29 +1,26 @@
 #!/usr/bin/env node
-// Builds data.json (only the tracked players) from the pokedata.ovh standings.
-// Zero dependencies, Node 18+.
+// Polls the pokedata.ovh standings, keeps only the tracked players and uploads
+// the result to the S3 bucket behind https://temp-assets.gin.codes.
+// Zero dependencies, Node 18+. Credentials come from .env (see scripts/s3.mjs).
 //
-//   node scripts/update.mjs               fetch once, write data.json
-//   node scripts/update.mjs --watch 320   poll every minute for 320 minutes and
-//                                         commit + push data.json when it changes
+//   node scripts/update.mjs          poll once a minute until the tournament ends
+//   node scripts/update.mjs --once   fetch and upload a single time
 //
-// pokedata sends no CORS headers, so the page cannot read it from the browser.
-// The GitHub Actions workflow runs this in --watch mode instead.
+// The upload is a small JavaScript file (data.jsonp) that calls window.__rodadaData(...).
+// The page loads it with a <script> tag, so the bucket needs no CORS configuration.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { s3Config, putObject } from './s3.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG = JSON.parse(readFileSync(path.join(ROOT, 'players.json'), 'utf8'));
-const DATA_FILE = path.join(ROOT, 'data.json');
 const SOURCE_BASE = 'https://www.pokedata.ovh/standings2/standings';
 const SOURCE_PAGE = 'https://www.pokedata.ovh/standings2/' + CONFIG.tournamentId;
 const USER_AGENT = 'standings-tracker/1.0 (polls once a minute)';
-
+const OBJECT_KEY = CONFIG.objectKey || 'rodada-na-tela/data.jsonp';
 const POLL_MS = 60 * 1000;
-const MAJOR_GAP_MS = 90 * 1000; // a tracked player's result or pairing changed
-const MINOR_GAP_MS = 10 * 60 * 1000; // only rank / opponent records moved
 
 const DIVISIONS = [...new Set(CONFIG.players.map((p) => p.division))];
 
@@ -79,8 +76,10 @@ export function summarize(json, division, tracked) {
 }
 
 // ----------------------------------------------------------------- source ---
-const cache = new Map(); // division -> {summary, etag, lastModified}
+const cache = new Map(); // division -> {summary, etag, sourceUpdated}
+const log = (...a) => console.log(new Date().toISOString(), ...a);
 
+// Conditional GET: an unchanged file costs a 304 with no body.
 async function refresh(division) {
   const c = cache.get(division) || {};
   const headers = { 'user-agent': USER_AGENT, accept: 'application/json' };
@@ -95,83 +94,51 @@ async function refresh(division) {
       const lm = Date.parse(res.headers.get('last-modified') || '');
       c.sourceUpdated = Number.isFinite(lm) ? lm : Date.now();
     }
+    cache.set(division, c);
+    return true;
   } catch (e) {
-    console.error(new Date().toISOString(), division, 'fetch failed:', String((e && e.message) || e));
+    log(division, 'source fetch failed:', String((e && e.message) || e));
+    return false;
   }
-  cache.set(division, c);
 }
 
-// Divisions the source could not deliver keep whatever the previous data.json had.
-function build(previous) {
-  const old = new Map(((previous && previous.divisions) || []).map((d) => [d.division, d]));
-  const divisions = DIVISIONS.map((d) => {
-    const c = cache.get(d);
-    if (c && c.summary) return { ...c.summary, sourceUpdated: c.sourceUpdated };
-    if (old.has(d)) return old.get(d);
-    return { division: d, round: null, players: CONFIG.players.filter((p) => p.division === d).map((p) => ({ name: p.name, missing: true })) };
-  });
-  return { generatedAt: Date.now(), sourcePage: SOURCE_PAGE, divisions };
+// generatedAt doubles as the heartbeat the page uses to tell the poller is alive.
+const build = () => ({
+  generatedAt: Date.now(), sourcePage: SOURCE_PAGE,
+  divisions: DIVISIONS.map((d) => ({ ...cache.get(d).summary, sourceUpdated: cache.get(d).sourceUpdated })),
+});
+
+const headline = (data) => data.divisions.map((d) => d.division + ' R' + d.round + ': ' +
+  d.players.map((p) => p.name.split(' ')[0] + ' ' + (p.missing ? 'missing' : p.record.join('-') + (p.rounds.some((r) => r.result === 'LIVE') ? '*' : ''))).join(', ')).join(' | ');
+
+async function upload(s3, data) {
+  const js = 'window.__rodadaData && window.__rodadaData(' + JSON.stringify(data) + ');\n';
+  await putObject(s3, OBJECT_KEY, js, 'application/javascript; charset=utf-8', 'no-cache, max-age=0');
 }
 
-// "major": something about a tracked player's own matches. "body": everything shown.
-const major = (data) => JSON.stringify((data.divisions || []).map((d) => [d.division, d.round,
-  (d.players || []).map((p) => [p.id, p.missing, p.record, p.droppedAfter, (p.rounds || []).map((r) => [r.result, r.table, r.opponent && r.opponent.id])])]));
-const body = (data) => JSON.stringify((data.divisions || []).map((d) => ({ ...d, sourceUpdated: 0 })));
-
-const readData = () => { try { return JSON.parse(readFileSync(DATA_FILE, 'utf8')); } catch { return null; } };
-const writeData = (data) => writeFileSync(DATA_FILE, JSON.stringify(data, null, 1) + '\n');
-
-// -------------------------------------------------------------------- git ---
-const git = (...args) => execFileSync('git', args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
-
-function publish(data) {
-  writeData(data);
-  const label = data.divisions.map((d) => d.division + ' R' + (d.round == null ? '?' : d.round)).join(', ');
-  git('add', 'data.json');
-  try { git('commit', '-m', 'data: ' + label); } catch { return true; } // nothing to commit
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try { git('push', 'origin', 'HEAD:' + (process.env.PUBLISH_BRANCH || 'gh-pages')); return true; } catch (e) {
-      console.error('push failed (attempt ' + attempt + '):', String(e.stderr || e.message).trim().split('\n').pop());
-      try { git('pull', '--rebase', '-X', 'theirs', 'origin', process.env.PUBLISH_BRANCH || 'gh-pages'); } catch { try { git('rebase', '--abort'); } catch {} }
-    }
-  }
-  return false;
-}
-
-// ------------------------------------------------------------------- main ---
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function once() {
-  await Promise.all(DIVISIONS.map(refresh));
-  const data = build(readData());
-  writeData(data);
-  for (const d of data.divisions) console.log(d.division, 'round', d.round, '-', (d.players || []).map((p) => p.name + (p.missing ? ' (missing)' : ' ' + p.record.join('-'))).join(', '));
-}
-
-async function watch(minutes) {
-  const deadline = Date.now() + minutes * 60 * 1000;
-  const endsAt = Date.parse(CONFIG.endsAt || '') || Infinity;
-  let published = readData();
-  let lastPush = 0;
-  for (;;) {
-    await Promise.all(DIVISIONS.map(refresh));
-    const data = build(published);
-    const since = Date.now() - lastPush;
-    const isMajor = !published || major(data) !== major(published);
-    const isMinor = !published || body(data) !== body(published);
-    if ((isMajor && since >= MAJOR_GAP_MS) || (isMinor && since >= MINOR_GAP_MS)) {
-      const ok = publish(data);
-      console.log(new Date().toISOString(), ok ? 'published' : 'publish FAILED', isMajor ? '(result/pairing change)' : '(standings moved)');
-      if (ok) { published = data; lastPush = Date.now(); }
-    }
-    if (Date.now() >= endsAt) { console.log('tournament window is over, stopping'); return; }
-    if (Date.now() + POLL_MS >= deadline) return;
-    await sleep(POLL_MS);
-  }
+// Returns true when the bucket now holds a fresh copy.
+async function cycle(s3, state) {
+  const ok = (await Promise.all(DIVISIONS.map(refresh))).every(Boolean);
+  if (!ok || !DIVISIONS.every((d) => cache.get(d) && cache.get(d).summary)) return false;
+  const data = build();
+  try { await upload(s3, data); } catch (e) { log('upload failed:', String((e && e.message) || e)); return false; }
+  const h = headline(data);
+  if (h !== state.headline) { state.headline = h; log(h); }
+  return true;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const i = process.argv.indexOf('--watch');
-  if (i === -1) await once();
-  else await watch(Math.max(1, Number(process.argv[i + 1]) || 320));
+  const s3 = s3Config();
+  if (!s3) { console.error('Missing S3_ACCESS_KEY / S3_SECRET_KEY / S3_API_URL / S3_BUCKET_NAME (.env).'); process.exit(1); }
+  const state = { headline: null };
+  if (process.argv.includes('--once')) {
+    process.exit((await cycle(s3, state)) ? 0 : 1);
+  }
+  const endsAt = Date.parse(CONFIG.endsAt || '') || Infinity;
+  log('polling every ' + POLL_MS / 1000 + 's, uploading to ' + s3.bucket + '/' + OBJECT_KEY);
+  for (;;) {
+    await cycle(s3, state);
+    if (Date.now() >= endsAt) { log('tournament window is over, stopping'); break; }
+    await new Promise((r) => setTimeout(r, POLL_MS));
+  }
 }

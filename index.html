@@ -13,6 +13,11 @@
   body { margin:0; background:var(--bg); color:var(--ink);
          font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
+  .grid { display:grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items:start; }
+  @media (min-width: 860px) {
+    main { max-width: 1080px; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  }
   h1 { font-size: 1.6rem; margin: 0 0 2px; letter-spacing: .02em; font-weight: 800; }
   .sub { color: var(--dim); margin: 0 0 14px; font-size: .88rem; }
   .status { display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 6px; }
@@ -20,7 +25,7 @@
   .pill b { color: var(--ink); font-weight: 600; }
   .pill.warn { border-color: var(--tie); color: var(--tie); }
   h2 { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); margin: 22px 0 8px; font-weight:600; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius: 12px; padding: 13px 14px; margin-bottom: 10px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius: 12px; padding: 13px 14px; }
   .card.playing { border-color: var(--live); }
   .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .name { font-weight: 650; font-size: 1.02rem; margin:0; overflow-wrap:anywhere; }
@@ -66,7 +71,10 @@
   var LABEL = { W: 'V', L: 'D', T: 'E', LIVE: '●', '?': '?' };
   var WORD = { W: 'Vitória', L: 'Derrota', T: 'Empate', LIVE: 'Jogando', '?': 'Sem resultado' };
   var DIV = { Masters: 'Masters', Senior: 'Seniors', Junior: 'Juniors' };
-  var STALE_MS = 30 * 60 * 1000;
+  // The poller uploads this file once a minute. It is a script (it calls
+  // window.__rodadaData) so it loads cross-origin without any CORS setup.
+  var DATA_URL = 'https://temp-assets.gin.codes/rodada-na-tela/data.jsonp';
+  var STALE_MS = 5 * 60 * 1000;
   var last = null;
 
   function esc(s) {
@@ -149,8 +157,9 @@
       var ps = (d.players || []).slice();
       if (!ps.length) return;
       ps.sort(function (a, b) { return (a.missing ? 1 : 0) - (b.missing ? 1 : 0) || (a.rank || 0) - (b.rank || 0); });
-      html += '<h2>' + name + (d.total ? ' · ' + num(d.total) + ' jogadores' : '') + '</h2>';
+      html += '<h2>' + name + (d.total ? ' · ' + num(d.total) + ' jogadores' : '') + '</h2><div class="grid">';
       ps.forEach(function (p) { html += card(p, d); });
+      html += '</div>';
     });
     document.getElementById('status').innerHTML = st;
     var list = document.getElementById('list');
@@ -166,21 +175,29 @@
     if (!last) return;
     var divs = last.divisions || [];
     var src = divs.map(function (d) { return d.sourceUpdated; }).filter(Boolean);
-    var newest = src.length ? Math.max.apply(null, src) : last.generatedAt;
-    var live = divs.some(function (d) { return d.tablesLive > 0; });
-    var text = newest ? ' Standings das ' + clock(newest) + ' (' + ago(Date.now() - newest) + ').' : '';
-    if (live && newest && Date.now() - newest > STALE_MS) text += ' Pode estar atrasado: confira no pokedata.';
+    var newest = src.length ? Math.max.apply(null, src) : null;
+    var checked = last.generatedAt || null;
+    var text = newest ? ' Standings das ' + clock(newest) + '.' : '';
+    if (checked) {
+      var age = Date.now() - checked;
+      text += age > STALE_MS ? ' Sem atualização ' + ago(age) + ': confira no pokedata.' : ' Conferido ' + ago(age) + '.';
+    }
     document.getElementById('age').textContent = text;
   }
 
+  window.__rodadaData = render;
+
   function load() {
-    fetch('data.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(render)
-      .catch(function () {
-        if (!last) document.getElementById('list').innerHTML = '<p class="empty">Não foi possível carregar os dados. Tentando de novo…</p>';
-        document.getElementById('age').textContent = ' Sem conexão; tentando de novo.';
-      });
+    var s = document.createElement('script');
+    s.src = DATA_URL + '?t=' + Date.now();
+    s.async = true;
+    s.onload = function () { s.remove(); };
+    s.onerror = function () {
+      s.remove();
+      if (!last) document.getElementById('list').innerHTML = '<p class="empty">Não foi possível carregar os dados. Tentando de novo…</p>';
+      document.getElementById('age').textContent = ' Sem conexão; tentando de novo.';
+    };
+    document.head.appendChild(s);
   }
   load();
   setInterval(load, 30000);
