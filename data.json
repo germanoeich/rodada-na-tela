@@ -1,5 +1,5 @@
 {
- "generatedAt": 1795190628693,
+ "generatedAt": 1795190718945,
  "sourcePage": "https://www.pokedata.ovh/standings2/1000087",
  "divisions": [
   {
@@ -214,110 +214,6 @@
        "opponent": {
         "id": 457,
         "name": "LUCAS TEIXEIRA",
-        "country": "BR",
-        "record": "1-2-0"
-       }
-      }
-     ]
-    },
-    {
-     "name": "Luiz Reis",
-     "country": "BR",
-     "id": 1584,
-     "rank": 901,
-     "record": [
-      2,
-      1,
-      0
-     ],
-     "points": 6,
-     "droppedAfter": null,
-     "homonyms": 2,
-     "rounds": [
-      {
-       "n": 1,
-       "result": "L",
-       "table": 1135,
-       "bye": false,
-       "opponent": {
-        "id": 1585,
-        "name": "Gabriel Kim",
-        "country": "BR",
-        "record": "1-1-1"
-       }
-      },
-      {
-       "n": 2,
-       "result": "W",
-       "table": 1338,
-       "bye": false,
-       "opponent": {
-        "id": 23,
-        "name": "Victor Fonseca",
-        "country": "PY",
-        "record": "1-2-0"
-       }
-      },
-      {
-       "n": 3,
-       "result": "W",
-       "table": 1089,
-       "bye": false,
-       "opponent": {
-        "id": 213,
-        "name": "vinicius menezes",
-        "country": "BR",
-        "record": "1-2-0"
-       }
-      }
-     ]
-    },
-    {
-     "name": "Luiz Reis",
-     "country": "BR",
-     "id": 2239,
-     "rank": 2541,
-     "record": [
-      0,
-      3,
-      0
-     ],
-     "points": 0,
-     "droppedAfter": null,
-     "homonyms": 2,
-     "rounds": [
-      {
-       "n": 1,
-       "result": "L",
-       "table": 1462,
-       "bye": false,
-       "opponent": {
-        "id": 2238,
-        "name": "Héctor Alejandro Tanabe Herbas",
-        "country": "BO",
-        "record": "1-1-0"
-       }
-      },
-      {
-       "n": 2,
-       "result": "L",
-       "table": 1520,
-       "bye": false,
-       "opponent": {
-        "id": 1630,
-        "name": "Diego Gonçalves",
-        "country": "BR",
-        "record": "2-1-0"
-       }
-      },
-      {
-       "n": 3,
-       "result": "L",
-       "table": 1638,
-       "bye": false,
-       "opponent": {
-        "id": 2185,
-        "name": "Marcelo Guarita",
         "country": "BR",
         "record": "1-2-0"
        }
