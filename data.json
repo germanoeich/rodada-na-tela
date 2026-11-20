@@ -1,5 +1,5 @@
 {
- "generatedAt": 1795190718945,
+ "generatedAt": 1795190998269,
  "sourcePage": "https://www.pokedata.ovh/standings2/1000087",
  "divisions": [
   {
@@ -7,7 +7,7 @@
    "round": 3,
    "day1": 8,
    "day2": 6,
-   "tablesLive": 240,
+   "tablesLive": 13,
    "total": 2647,
    "title": "2027 Latin America Pokémon TCG International Championships",
    "date": "November 20-22, 2026",
@@ -16,7 +16,7 @@
      "name": "Emerson Douglas Neves",
      "country": "BR",
      "id": 805,
-     "rank": 1723,
+     "rank": 1821,
      "record": [
       1,
       2,
@@ -68,7 +68,7 @@
      "name": "Vitor Moreira Neves",
      "country": "BR",
      "id": 1334,
-     "rank": 115,
+     "rank": 118,
      "record": [
       3,
       0,
@@ -99,7 +99,7 @@
         "id": 2434,
         "name": "Icaro Oliveira Guereta",
         "country": "BR",
-        "record": "1-1-0"
+        "record": "1-1-1"
        }
       },
       {
@@ -120,7 +120,7 @@
      "name": "Lucas Portal de Almeida Neto",
      "country": "BR",
      "id": 1322,
-     "rank": 811,
+     "rank": 823,
      "record": [
       2,
       1,
@@ -172,7 +172,7 @@
      "name": "Matheus Nunes",
      "country": "BR",
      "id": 184,
-     "rank": 719,
+     "rank": 723,
      "record": [
       2,
       1,
@@ -224,7 +224,7 @@
      "name": "Riquelme Pereira Spolavori",
      "country": "BR",
      "id": 664,
-     "rank": 546,
+     "rank": 565,
      "record": [
       2,
       1,
@@ -273,14 +273,14 @@
      ]
     }
    ],
-   "sourceUpdated": 1795190589000
+   "sourceUpdated": 1795190947000
   },
   {
    "division": "Senior",
    "round": 3,
    "day1": 8,
    "day2": 3,
-   "tablesLive": 9,
+   "tablesLive": 0,
    "total": 310,
    "title": "2027 Latin America Pokémon TCG International Championships",
    "date": "November 20-22, 2026",
@@ -338,7 +338,7 @@
      ]
     }
    ],
-   "sourceUpdated": 1795190595000
+   "sourceUpdated": 1795190956000
   }
  ]
 }
