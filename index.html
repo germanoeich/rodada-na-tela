@@ -138,11 +138,10 @@
       if (!cut) return { html: html, over: false };
       var done = rounds.filter(function (r) { return r.result !== 'LIVE'; }).length;
       var left = Math.max(0, d.day1 - done);
-      var dayOver = d.round === d.day1 && !(d.tablesLive > 0);
       if (p.points >= cut) {
-        html += '<p class="quali ok">✓ ' + (dayOver ? 'Classificado para o dia 2' : 'Dia 2 garantido') + ' (' + cut + '+ pts)</p>';
+        html += '<p class="quali ok">✓ Atingiu o corte do dia 2 (' + cut + '+ pts)</p>';
       } else if (p.points + 3 * left < cut) {
-        html += '<p class="quali">' + (left === 0 ? 'Não avançou ao dia 2' : 'Sem chance de dia 2') + ' (corte: ' + cut + ' pts)</p>';
+        html += '<p class="quali">' + (left === 0 ? 'Abaixo do corte do dia 2' : 'Não alcança mais o corte do dia 2') + ' (' + cut + ' pts)</p>';
         return { html: html, over: left === 0 };
       } else {
         html += '<p class="quali">Dia 2: faltam ' + (cut - p.points) + ' pts em ' + left + (left === 1 ? ' rodada' : ' rodadas') + '</p>';
